@@ -2,6 +2,7 @@ module axi_7seg_cntr #(
     parameter int unsigned NDISP = 8, // Number of 7-segment displays [2...8]
     parameter bit unsigned MODE_DISP  = 1, // 0: common anode, 1: common cathode
     parameter bit unsigned MODE_SEG   = 1, // 0: common anode, 1: common cathode
+    parameter int unsigned REFRESH_CNT   = 100_000, // Refresh DISP
     parameter int unsigned ADDR_WIDTH = 3,
     parameter int unsigned DATA_WIDTH = 32
 ) (
@@ -202,10 +203,13 @@ module axi_7seg_cntr #(
         if (!nrst) begin
             refresh_counter    <= 0;
         end else begin
-            refresh_counter <= refresh_counter + 1;
+            if (end_of_count)
+                refresh_counter <= 0;
+            else
+                refresh_counter <= refresh_counter + 1;
         end
     end
-    assign end_of_count = (refresh_counter == 20'hFFFFF) ? 1'b1 : 1'b0;
+    assign end_of_count = (refresh_counter == REFRESH_CNT) ? 1'b1 : 1'b0;
 
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) begin
