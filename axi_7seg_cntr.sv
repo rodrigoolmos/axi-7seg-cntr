@@ -1,8 +1,9 @@
 module axi_7seg_cntr #(
     parameter int unsigned NDISP = 8, // Number of 7-segment displays [2...8]
-    parameter bit unsigned MODE_DISP  = 1, // 0: common anode, 1: common cathode
-    parameter bit unsigned MODE_SEG   = 1, // 0: common anode, 1: common cathode
-    parameter int unsigned REFRESH_CNT   = 100_000, // Refresh DISP
+    parameter bit unsigned MODE_DISP  = 1, // 1 => active-low digit enable (Nexys A7 common-anode)
+    parameter bit unsigned MODE_SEG   = 0, // 0 => active-low segments (Nexys A7 common-anode)
+    parameter int unsigned CLK_FREQ_HZ = 100_000_000,
+    parameter int unsigned DIGIT_REFRESH_HZ = 1000,
     parameter int unsigned ADDR_WIDTH = 3,
     parameter int unsigned DATA_WIDTH = 32
 ) (
@@ -51,7 +52,12 @@ module axi_7seg_cntr #(
     logic                       data_dp[NDISP-1:0];
     logic [$clog2(NDISP)-1:0]   digit_display;
     logic [3:0]                 digit_displayed;
-    logic [19:0]                refresh_counter;
+    localparam int unsigned REFRESH_TICKS =
+        ((CLK_FREQ_HZ / (NDISP * DIGIT_REFRESH_HZ)) > 0) ? (CLK_FREQ_HZ / (NDISP * DIGIT_REFRESH_HZ)) : 1;
+    localparam int unsigned REFRESH_COUNTER_MAX = REFRESH_TICKS - 1;
+    localparam int unsigned REFRESH_COUNTER_WIDTH =
+        (REFRESH_TICKS > 1) ? $clog2(REFRESH_TICKS) : 1;
+    logic [REFRESH_COUNTER_WIDTH-1:0] refresh_counter;
     logic                       end_of_count;
 
     localparam ADDR_SEG  = 0;
@@ -201,15 +207,14 @@ module axi_7seg_cntr #(
     // 7-segment display control
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) begin
-            refresh_counter    <= 0;
+            refresh_counter <= '0;
+        end else if (end_of_count) begin
+            refresh_counter <= '0;
         end else begin
-            if (end_of_count)
-                refresh_counter <= 0;
-            else
-                refresh_counter <= refresh_counter + 1;
+            refresh_counter <= refresh_counter + 1;
         end
     end
-    assign end_of_count = (refresh_counter == REFRESH_CNT) ? 1'b1 : 1'b0;
+    assign end_of_count = (refresh_counter == REFRESH_COUNTER_MAX);
 
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) begin
